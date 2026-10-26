@@ -119,6 +119,37 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
+--- !u!1 &58538083
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 58538084}
+  m_Layer: 0
+  m_Name: DestinationMark
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &58538084
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 58538083}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &330585543
 GameObject:
   m_ObjectHideFlags: 0
@@ -438,8 +469,74 @@ PrefabInstance:
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 1050859843142217524, guid: aa210caf2bc015d408787d6d87402ecb, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 438464083}
+    - targetCorrespondingSourceObject: {fileID: 1050859843142217524, guid: aa210caf2bc015d408787d6d87402ecb, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 438464086}
   m_SourcePrefab: {fileID: 100100000, guid: aa210caf2bc015d408787d6d87402ecb, type: 3}
+--- !u!1 &438464082 stripped
+GameObject:
+  m_CorrespondingSourceObject: {fileID: 1050859843142217524, guid: aa210caf2bc015d408787d6d87402ecb, type: 3}
+  m_PrefabInstance: {fileID: 438464081}
+  m_PrefabAsset: {fileID: 0}
+--- !u!195 &438464083
+NavMeshAgent:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 438464082}
+  m_Enabled: 1
+  m_AgentTypeID: 0
+  m_Radius: 0.5
+  m_Speed: 3.5
+  m_Acceleration: 8
+  avoidancePriority: 50
+  m_AngularSpeed: 120
+  m_StoppingDistance: 0
+  m_AutoTraverseOffMeshLink: 1
+  m_AutoBraking: 1
+  m_AutoRepath: 1
+  m_Height: 2
+  m_BaseOffset: 0
+  m_WalkableMask: 4294967295
+  m_ObstacleAvoidanceType: 4
+--- !u!114 &438464086
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 438464082}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 76a9e7fc0ffa4344896060d7d9655ef3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Character
+  stat:
+    Health:
+      _baseValue: 0
+    Defense:
+      _baseValue: 0
+    Evasion:
+      _baseValue: 0
+    Damage:
+      _baseValue: 0
+    AttackRadius:
+      _baseValue: 0
+    AttackSpeed:
+      _baseValue: 0
+    CriticalRate:
+      _baseValue: 0
+    CriticalDamage:
+      _baseValue: 0
+    MoveSpeed:
+      _baseValue: 0
+  Team: 0
+  destinationMarker: {fileID: 58538083}
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -501,6 +598,7 @@ GameObject:
   - component: {fileID: 1070907168}
   - component: {fileID: 1070907167}
   - component: {fileID: 1070907166}
+  - component: {fileID: 1070907170}
   m_Layer: 0
   m_Name: Plane
   m_TagString: Untagged
@@ -602,6 +700,38 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1070907170
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1070907165}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7a5ac11cc976e418e8d13136b07e1f52, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.AI.Navigation::Unity.AI.Navigation.NavMeshSurface
+  m_SerializedVersion: 0
+  m_AgentTypeID: 0
+  m_CollectObjects: 0
+  m_Size: {x: 10, y: 10, z: 10}
+  m_Center: {x: 0, y: 2, z: 0}
+  m_LayerMask:
+    serializedVersion: 2
+    m_Bits: 4294967295
+  m_UseGeometry: 0
+  m_DefaultArea: 0
+  m_GenerateLinks: 0
+  m_IgnoreNavMeshAgent: 1
+  m_IgnoreNavMeshObstacle: 1
+  m_OverrideTileSize: 0
+  m_TileSize: 256
+  m_OverrideVoxelSize: 0
+  m_VoxelSize: 0.16666667
+  m_MinRegionArea: 2
+  m_NavMeshData: {fileID: 23800000, guid: b8e504071606f1443978a9480e8ac35e, type: 2}
+  m_BuildHeightMesh: 0
 --- !u!1001 &1266519754
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -669,3 +799,4 @@ SceneRoots:
   - {fileID: 1070907169}
   - {fileID: 1266519754}
   - {fileID: 438464081}
+  - {fileID: 58538084}
