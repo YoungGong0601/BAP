@@ -79,7 +79,7 @@ public static class EntityManager
     {
         return new Vector2Int(
             Mathf.FloorToInt(position.x / CellSize),
-            Mathf.FloorToInt(position.y / CellSize)
+            Mathf.FloorToInt(position.z / CellSize)
         );
     }
 
@@ -135,11 +135,12 @@ public static class EntityManager
             {
                 var e = list[i];
                 if (e == null) continue;
+                if (!e.Stat.CanBeTargeted) continue;
                 if ((e.Team & targetTeam) == 0) continue;
                 if (e == exclude) continue;
                 if (excludeEntities != null && excludeEntities.Contains(e)) continue;
 
-                var sqr = ((Vector2)(e.transform.position - position)).sqrMagnitude;
+                var sqr = (e.transform.position - position).ToXZ().sqrMagnitude;
                 if (sqr <= nearestSqr)
                 {
                     nearestSqr = sqr;
@@ -177,11 +178,12 @@ public static class EntityManager
             {
                 var e = list[i];
                 if (e == null) continue;
+                if (!e.Stat.CanBeTargeted) continue;
                 if ((e.Team & targetTeam) == 0) continue;
                 if (e == exclude) continue;
                 if (excludeEntities != null && excludeEntities.Contains(e)) continue;
 
-                var sqr = ((Vector2)(e.transform.position - position)).sqrMagnitude;
+                var sqr = (e.transform.position - position).ToXZ().sqrMagnitude;
                 if (sqr <= rangeSqr)
                 {
                     result.Add(e);

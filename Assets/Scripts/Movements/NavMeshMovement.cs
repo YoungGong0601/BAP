@@ -16,17 +16,27 @@ public class NavMeshMovement : Movement
     public override void MoveTo(Vector3 destination)
     {
         destination.y = 0f;
-        Destination = destination;
+        Destination = destination.ToXZ();
         IsMoving = agent.SetDestination(destination);
     }
 
     public override void Tick(float delta)
     {
-        agent.speed = owner.stat.MoveSpeed;
-        if (IsMoving && !agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
+        if (!owner.Stat.CanMove)
         {
             Stop();
+            return;
         }
+
+        Vector3 moveDirection = agent.velocity;
+        moveDirection.y = 0f;
+        if (moveDirection.sqrMagnitude > 0.0001f)
+            owner.transform.rotation = Quaternion.LookRotation(moveDirection);
+
+        agent.speed = owner.Stat.MoveSpeed;
+        if (IsMoving && !agent.pathPending && agent.remainingDistance <= agent.stoppingDistance)
+            Stop();
+
     }
 
     public override void Stop()

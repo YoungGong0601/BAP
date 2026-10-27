@@ -9,6 +9,7 @@ public abstract class Movement
     protected readonly Entity owner;
     protected readonly Transform transform;
 
+    public Vector2 Position => transform.position.ToXZ();
     public Vector2 Destination { get; protected set; } = Vector2.zero;
     public bool IsMoving { get; protected set; } = false;
 
@@ -30,7 +31,7 @@ public abstract class Movement
     }
 
     public bool IsArrived()
-     => ((Vector2)transform.position - Destination).sqrMagnitude <= ARRIVE_DISTANCE * ARRIVE_DISTANCE;
+     => (Position - Destination).sqrMagnitude <= ARRIVE_DISTANCE * ARRIVE_DISTANCE;
 
 
 }

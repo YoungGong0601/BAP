@@ -1,8 +1,28 @@
 using UnityEngine;
 
+// 공격 적용
+public static class AttackApplier
+{
+    // 명중하면 true, damage에 최종 데미지
+    public static bool Attack(EntityStats attacker, EntityStats target, out float damage)
+    {
+        damage = 0f;
+        if (attacker == null || target == null) return false;
+        if (!attacker.CanAttack || !target.CanHit) return false; // 공격 불가, 피격 불가
+
+        if (Random.value >= CombatFormula.GetHitRate(attacker, target)) return false; // 회피
+
+        damage = CombatFormula.CalculateDamage(attacker, target);
+
+        target.Health = Mathf.Max(0f, target.Health - damage);
+
+        return true;
+    }
+}
+
 // 블루아카 데미지 공식
 // 블아 수치 단위 (치명 피해 20000 = 200%)
-public static class CombatManager
+public static class CombatFormula
 {
     const float EVASION_CONST = 2000f;          // 명중률 = 2000 / (회피 - 명중 + 2000)
     const float CRITICAL_CONST = 666.66f;       // 치명 확률 = 치명 / (치명 + 666.66)
@@ -10,18 +30,6 @@ public static class CombatManager
     const float STABILITY_CONST = 1000f;        // 최소 데미지 비율 = 안정 / (안정 + 1000) + 0.2
     const float STABILITY_MIN = 0.2f;
     const float DEFENSE_CONST = 1666.66f;       // 피해 감소 = 1 / (1 + 방어 / 1666.66)
-
-    // 명중하면 true, damage에 최종 데미지
-    public static bool Attack(EntityStats attacker, EntityStats target, out float damage)
-    {
-        damage = 0f;
-        if (attacker == null || target == null) return false;
-
-        if (Random.value >= GetHitRate(attacker, target)) return false; // 회피
-
-        damage = CalculateDamage(attacker, target);
-        return true;
-    }
 
     public static float CalculateDamage(EntityStats attacker, EntityStats target)
     {

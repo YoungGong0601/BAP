@@ -21,6 +21,7 @@ public class Stat
     // 기본값 (인스펙터에서만 수정)
     [SerializeField] float _baseValue;
     public float BaseValue => _baseValue;
+    public void SetBaseValue(float value) { _baseValue = value; MarkDirty(); }
 
     // ** Modifiers **
     readonly Dictionary<string, Mod> _mods = new();
@@ -50,8 +51,10 @@ public class Stat
     {
         get
         {
-            if (_dirty) {
-                if (_evaluating) {
+            if (_dirty)
+            {
+                if (_evaluating)
+                {
 #if UNITY_EDITOR
                     Debug.LogError($"[Stat] 순환 참조 BUG: {string.Join(" -> ", s_refPath)}"); // 순환 오류 log 출력
                     Debug.Break();
@@ -126,11 +129,13 @@ public class Stat
     void RebuildBuckets()
     {
         for (int i = 0; i < RankCount; i++) _buckets[i] = new Bucket { multiply = 1 }; // flat, percent는 0
-        foreach (var (key, mod) in _mods) {
+        foreach (var (key, mod) in _mods)
+        {
             ref var b = ref _buckets[(int)mod.rank];
 #if UNITY_EDITOR
             float v;
-            if (mod.source != null) {
+            if (mod.source != null)
+            {
                 s_refPath.Add(key); // 순환 오류 log 경로용. 에디터에서만 작동
                 try { v = mod.GetValue(); }
                 finally { s_refPath.RemoveAt(s_refPath.Count - 1); }
@@ -139,7 +144,8 @@ public class Stat
 #else
             float v = mod.GetValue();
 #endif
-            switch (mod.type) {
+            switch (mod.type)
+            {
                 case ModifierType.Flat: b.flat += v; break;
                 case ModifierType.PercentAdd: b.percent += v; break;
                 case ModifierType.Multiplier: b.multiply *= v; break;
@@ -156,7 +162,8 @@ public class Stat
 
         string log = $"{naming} Buckets:";
         float total = _baseValue;
-        for (int i = 0; i < RankCount; i++) {
+        for (int i = 0; i < RankCount; i++)
+        {
             var b = _buckets[i];
             total = ((total + b.flat) + (total * b.percent)) * b.multiply;
             log += $"\n{(ModRank)i}:=> {total} ( add = {b.flat} , pct = {b.percent} , multi={b.multiply} )";

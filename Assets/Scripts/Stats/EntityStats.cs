@@ -1,15 +1,23 @@
 
 using UnityEngine;
+using UnityEngine.Serialization;
 
 // entity stats
 [System.Serializable]
 public class EntityStats
 {
     // health
-    public Stat Health, Defense, Evasion;
+    [FormerlySerializedAs("Health")] public Stat MaxHealth;
+    [System.NonSerialized] public float Health;
+    public Stat Defense, Evasion;
     // attack
-    public Stat Damage, AttackRadius, AttackSpeed, CriticalRate, CriticalDamage, Accuracy, Stability;
+    public Stat Damage, AttackRange, AttackSpeed, CriticalRate, CriticalDamage, Accuracy, Stability;
     // speed
     public Stat MoveSpeed;
+
+    public bool CanAttack = true;
+    public bool CanBeTargeted = true;
+    public bool CanHit = true;
+    public bool CanMove = true;
 
 }
