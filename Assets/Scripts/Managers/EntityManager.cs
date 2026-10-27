@@ -89,11 +89,14 @@ public static class EntityManager
 
     // 가장 가까운 다른 팀 Entity를 반환. Ring search
     public static Entity GetNearestEntity(Vector3 position, float range, Team targetTeam, Entity exclude = null, HashSet<Entity> excludeEntities = null)
+        => GetNearestEntity<Entity>(position, range, targetTeam, exclude, excludeEntities);
+
+    public static T GetNearestEntity<T>(Vector3 position, float range, Team targetTeam, T exclude = null, HashSet<T> excludeEntities = null) where T : Entity
     {
         var center = GetCellPosition(position);
         var maxRing = Mathf.CeilToInt(range / CellSize);
 
-        Entity nearestEntity = null;
+        T nearest = null;
         float nearestSqr = range * range;
 
         for (int ring = 0; ring <= maxRing; ring++)
@@ -123,7 +126,7 @@ public static class EntityManager
             }
         }
 
-        return nearestEntity;
+        return nearest;
 
         // ── func ──────────────
 
@@ -138,20 +141,21 @@ public static class EntityManager
                 if (!e.Stat.CanBeTargeted) continue;
                 if ((e.Team & targetTeam) == 0) continue;
                 if (e == exclude) continue;
-                if (excludeEntities != null && excludeEntities.Contains(e)) continue;
+                if (e is not T t) continue;
+                if (excludeEntities != null && excludeEntities.Contains(t)) continue;
 
                 var sqr = (e.transform.position - position).ToXZ().sqrMagnitude;
                 if (sqr <= nearestSqr)
                 {
                     nearestSqr = sqr;
-                    nearestEntity = e;
+                    nearest = t;
                 }
             }
         }
     }
 
 
-    public static int GetEntitiesInRange(Vector3 position, float range, Team targetTeam, List<Entity> result, Entity exclude = null, HashSet<Entity> excludeEntities = null)
+    public static int GetEntitiesInRange<T>(Vector3 position, float range, Team targetTeam, List<T> result, T exclude = null, HashSet<T> excludeEntities = null) where T : Entity
     {
         result.Clear();
         var center = GetCellPosition(position);
@@ -181,12 +185,13 @@ public static class EntityManager
                 if (!e.Stat.CanBeTargeted) continue;
                 if ((e.Team & targetTeam) == 0) continue;
                 if (e == exclude) continue;
-                if (excludeEntities != null && excludeEntities.Contains(e)) continue;
+                if (e is not T t) continue;
+                if (excludeEntities != null && excludeEntities.Contains(t)) continue;
 
                 var sqr = (e.transform.position - position).ToXZ().sqrMagnitude;
                 if (sqr <= rangeSqr)
                 {
-                    result.Add(e);
+                    result.Add(t);
                 }
             }
         }

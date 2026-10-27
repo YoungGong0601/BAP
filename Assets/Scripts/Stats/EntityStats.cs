@@ -1,4 +1,5 @@
 
+using System;
 using UnityEngine;
 using UnityEngine.Serialization;
 
@@ -6,10 +7,15 @@ using UnityEngine.Serialization;
 [System.Serializable]
 public class EntityStats
 {
+    // types
+    [SerializeField] public AttackType AttackType = AttackType.Normal;
+    [SerializeField] public ArmorType ArmorType = ArmorType.Light;
+
     // health
-    [FormerlySerializedAs("Health")] public Stat MaxHealth;
-    [System.NonSerialized] public float Health;
-    public Stat Defense, Evasion;
+    [SerializeField] public Stat MaxHealth = new(100);
+    [HideInInspector] public float Health;
+    public Stat Defense;
+    public Stat Evasion;
     // attack
     public Stat Damage, AttackRange, AttackSpeed, CriticalRate, CriticalDamage, Accuracy, Stability;
     // speed
@@ -19,5 +25,9 @@ public class EntityStats
     public bool CanBeTargeted = true;
     public bool CanHit = true;
     public bool CanMove = true;
+
+
+    // Action
+    public Obstacle JoinedObstacle;
 
 }

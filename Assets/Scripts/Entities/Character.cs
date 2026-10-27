@@ -1,4 +1,4 @@
-using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -6,6 +6,11 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public class Character : Entity
 {
+
+    const float FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET = -3f; // target 사거리 가능한 내가 되도록
+    const float OBSTACLE_FIND_RANGE = 6f; // 자신 근처 장애물인가
+    const float MIN_OBSTACLE_DISTANCE_FROM_TARGET = 3f; // 장애물과 타겟 사이의 최소 거리
+
     NavMeshMovement movement;
 
     // FSM
@@ -18,9 +23,10 @@ public class Character : Entity
         public abstract void OnExit();
     }
     StateBase currentState;
-    StateBase rest, chase, attackFocus, dead;
+    StateBase rest, chase, attackFocus, dead, goToObstacle;
 
-    Entity target;
+    Entity nearestTarget;
+    Obstacle validObstacle; // 찾은 엄폐물. 이용중인 엄폐물은 target.Stat.JoinedObstacle
 
 
 
@@ -46,15 +52,32 @@ public class Character : Entity
         chase = new Chase(this);
         attackFocus = new AttackFocus(this);
         dead = new Dead(this);
-
+        goToObstacle = new GoToObstacle(this);
         // test
-        Stat.AttackRange.SetBaseValue(UnityEngine.Random.Range(10f, 17f));
+        Stat.AttackRange.SetBaseValue(Random.Range(10f, 17f));
     }
 
     void Update()
     {
         movement.Tick(Time.deltaTime);
         InCombatTick();
+    }
+
+    int findTick = 0;
+    void FixedUpdate()
+    {
+        // fixme: 갱신은 Tick으로 진행하는걸 추천한다. 임시로 구현함.
+        findTick++;
+        if (findTick >= 30) // 0.5초마다 갱신
+        {
+            findTick = 0;
+            nearestTarget = EntityManager.GetNearestEntity(transform.position, 50f, (Team.Me | Team.Enemy) ^ Team, this);
+            // if (!IsValidObstacle(validObstacle, nearestTarget))
+            // {
+            validObstacle = GetValidObstacle(nearestTarget);
+            validObstacle?.Join(this); // 선 타겟팅: 고른 즉시 예약
+            // }
+        }
     }
 
 
@@ -69,16 +92,19 @@ public class Character : Entity
             return;
         }
 
-        if (!HasTarget())
-            target = EntityManager.GetNearestEntity(transform.position, 50f, (Team.Me | Team.Enemy) ^ Team, this);
+        // 엄폐물이 바뀌었거나 사라졌으면 기존 엄폐물에서 나옴
+        if (Stat.JoinedObstacle != null && Stat.JoinedObstacle != validObstacle)
+            Stat.JoinedObstacle.Leave(this);
 
-        if (HasTarget() && TargetInRange())
+        bool hasTarget = HasTarget();
+        if (hasTarget && Stat.JoinedObstacle != null && !Stat.JoinedObstacle.IsUserArrived)
+            Enter(goToObstacle); // 예약한 엄폐물로 이동, 도착하면 Arrive
+        else if (hasTarget && TargetInRange())
             Enter(attackFocus);
-        else if (HasTarget())
+        else if (hasTarget)
             Enter(chase);
         else
             Enter(rest);
-
     }
 
     void Enter(StateBase state)
@@ -89,9 +115,65 @@ public class Character : Entity
         currentState.OnEnter();
     }
 
-    bool HasTarget() => target != null && target.isActiveAndEnabled && target.Stat.CanBeTargeted;
+    bool HasTarget() => nearestTarget != null && nearestTarget.isActiveAndEnabled && nearestTarget.Stat.CanBeTargeted;
     bool TargetInRange()
-    => target != null && (target.transform.position - transform.position).ToXZ().sqrMagnitude <= Stat.AttackRange * Stat.AttackRange;
+    => nearestTarget != null && (nearestTarget.transform.position - transform.position).ToXZ().sqrMagnitude <= Stat.AttackRange * Stat.AttackRange;
+
+    bool IsValidObstacle(Obstacle obstacle, Entity target)
+    {
+        if (obstacle == null || target == null) return false;
+
+        bool inRangeFromMe
+            = (obstacle.transform.position - transform.position).ToXZ().sqrMagnitude <= OBSTACLE_FIND_RANGE * OBSTACLE_FIND_RANGE;
+        bool isObstacleWithinAttackRangeOfTarget
+            = (obstacle.transform.position - target.transform.position).ToXZ().sqrMagnitude <= (Stat.AttackRange + FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET) * (Stat.AttackRange + FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET);
+        bool res = inRangeFromMe && isObstacleWithinAttackRangeOfTarget;
+        return res;
+    }
+
+
+
+    // 타겟과의 거리가 공격 범위 내에 있는 유효한 장애물을 찾는다.
+    // 이미 유효한 장애물이 없으면,
+    // 적을 공격 할 수 있는 거리에 있는 장애물 중
+    // 사용되지 않은 장애물 중
+    // 자기 근처의 장애물 중
+    // 장애물이 너무 타겟에게 가깝지 않은 것 중
+    // 자신에게 가장 가까운 장애물을 반환한다.
+    List<Obstacle> obstacles_cache = new();
+    Obstacle GetValidObstacle(Entity target)
+    {
+        if (target == null) return null;
+
+        Obstacle validObstacle = null;
+        obstacles_cache.Clear();
+
+        var obstacleCnt = EntityManager.GetEntitiesInRange(target.transform.position, Stat.AttackRange + FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET, Team.Obstacle, obstacles_cache);
+        if (obstacleCnt <= 0) return null;
+
+        var nearestFromMeSqr = OBSTACLE_FIND_RANGE * OBSTACLE_FIND_RANGE; // 못해도 이것보단 가까워야한다.
+
+        for (int i = obstacleCnt - 1; i >= 0; i--)
+        {
+            var o = obstacles_cache[i];
+            if (o.User == this) return o; // 예약/사용 중인 내 엄폐물은 유지
+
+            // 사용된 장애물은 제외
+            if (o.IsUsing()) continue;
+
+            // 타겟과의 거리가 너무 가까운 장애물은 제외
+            if ((o.transform.position - target.transform.position).ToXZ().sqrMagnitude < MIN_OBSTACLE_DISTANCE_FROM_TARGET * MIN_OBSTACLE_DISTANCE_FROM_TARGET) continue;
+
+            // 자기 근처의 장애물 중 가장 가까운 장애물을 반환!
+            if ((o.transform.position - transform.position).ToXZ().sqrMagnitude <= nearestFromMeSqr)
+            {
+                nearestFromMeSqr = (o.transform.position - transform.position).ToXZ().sqrMagnitude;
+                validObstacle = o;
+            }
+        }
+
+        return validObstacle;
+    }
 
 
 
@@ -125,7 +207,7 @@ public class Character : Entity
 
         public override void OnEnter()
         {
-            c.movement.MoveTo(c.target.transform.position);
+            c.movement.MoveTo(c.nearestTarget.transform.position);
             TestCharacterAnimation.StartMove(c.VisualBody);
         }
 
@@ -138,9 +220,55 @@ public class Character : Entity
         public override void OnUpdate()
         {
             var destination = c.movement.Destination;
-            var targetPos = c.target.transform.position;
-            if (c.target != null && (destination - targetPos.ToXZ()).sqrMagnitude > REPATH_DISTANCE * REPATH_DISTANCE)
-                c.movement.MoveTo(c.target.transform.position);
+            var targetPos = c.nearestTarget.transform.position;
+            if (c.nearestTarget != null && (destination - targetPos.ToXZ()).sqrMagnitude > REPATH_DISTANCE * REPATH_DISTANCE)
+                c.movement.MoveTo(c.nearestTarget.transform.position);
+        }
+    }
+
+    class GoToObstacle : StateBase
+    {
+        const float REPATH_DISTANCE = 0.5f; // 엄폐 위치가 이만큼 바뀌면 경로 재계산
+        const float COVER_OFFSET = 1f;      // 엄폐물 중심에서 타겟 반대편으로 떨어질 거리
+        const float ARRIVE_DISTANCE = 0.5f; // 엄폐 위치에 이만큼 가까우면 도착
+
+        public GoToObstacle(Character c) : base(c) { }
+
+        // 엄폐물 기준 타겟 반대편 위치
+        Vector3 CoverPos()
+        {
+            var obstaclePos = c.Stat.JoinedObstacle.transform.position;
+            return obstaclePos + (obstaclePos - c.nearestTarget.transform.position).SetY0().normalized * COVER_OFFSET;
+        }
+
+        public override void OnEnter()
+        {
+            c.movement.MoveTo(CoverPos());
+            TestCharacterAnimation.StartMove(c.VisualBody);
+        }
+
+        public override void OnExit()
+        {
+            c.movement.Stop();
+            TestCharacterAnimation.StopMove(c.VisualBody);
+        }
+
+        public override void OnUpdate()
+        {
+            if (c.Stat.JoinedObstacle == null || c.nearestTarget == null) return;
+
+            var coverPos = CoverPos();
+
+            // 도착 -> Arrive (다음 InCombatTick에서 attackFocus로 전환)
+            if ((coverPos - c.transform.position).ToXZ().sqrMagnitude <= ARRIVE_DISTANCE * ARRIVE_DISTANCE)
+            {
+                c.Stat.JoinedObstacle.Arrive(c);
+                return;
+            }
+
+            // 엄폐물이 바뀌었거나 타겟이 움직여 엄폐 위치가 바뀌면 재계산
+            if ((c.movement.Destination - coverPos.ToXZ()).sqrMagnitude > REPATH_DISTANCE * REPATH_DISTANCE)
+                c.movement.MoveTo(coverPos);
         }
     }
 
@@ -177,27 +305,29 @@ public class Character : Entity
         {
             if (IsPlayingAttackAnim) return;
             if (Time.time < nextAttackTime) return;
-            if (c.target == null) return;
+            if (c.nearestTarget == null) return;
 
             nextAttackTime = Time.time + AttackInterval;
             animEndTime = Time.time + ATTACK_ANIMATION_TIME;
 
-            c.VisualBody.rotation = Quaternion.LookRotation((c.target.transform.position - c.VisualBody.position).SetY0());
-            TestCharacterAnimation.Shoot(c.VisualBody, c.target.transform.position);
+            c.VisualBody.rotation = Quaternion.LookRotation((c.nearestTarget.transform.position - c.VisualBody.position).SetY0());
+            TestCharacterAnimation.Shoot(c.VisualBody, c.nearestTarget.transform.position);
 
-            if (AttackApplier.Attack(c.Stat, c.target.Stat, out var damage))
+            AttackResult result = AttackApplier.Attack(c, c.nearestTarget, out var damage);
+
+            if (result >= AttackResult.Hit) // Hit!
             {
-                BulletLineDrawer.DrawLine(c.VisualBody.position, c.target.transform.position, Color.white, 0.1f);
-                Debug.Log($"{c.name} -> {c.target.name} : {damage:0}");
-                if (c.target is Character t) TestCharacterAnimation.Hit(t.VisualBody);
+                BulletLineDrawer.DrawLine(c.VisualBody.position, c.nearestTarget.transform.position, Color.white, 0.1f);
+                Debug.Log($"{c.name} -> {c.nearestTarget.name} : {damage:0}");
+                if (c.nearestTarget is Character t) TestCharacterAnimation.Hit(t.VisualBody);
             }
-            else
-                Debug.Log($"{c.name} -> {c.target.name} : Miss");
+            else // Miss!
+                Debug.Log($"{c.name} -> {c.nearestTarget.name} : Miss");
 
             // 더 가까운 타겟이 있으면 공격 직후 전환
             var nearestTarget = EntityManager.GetNearestEntity(c.transform.position, 50f, (Team.Me | Team.Enemy) ^ c.Team, c);
-            if (nearestTarget != null && nearestTarget != c.target)
-                c.target = nearestTarget;
+            if (nearestTarget != null && nearestTarget != c.nearestTarget)
+                c.nearestTarget = nearestTarget;
         }
     }
 
@@ -207,6 +337,7 @@ public class Character : Entity
 
         public override void OnEnter()
         {
+            c.Stat.JoinedObstacle?.Leave(c);
             c.movement.Stop();
             c.Stat.CanBeTargeted = false;
             TestCharacterAnimation.Dead(c.VisualBody);
