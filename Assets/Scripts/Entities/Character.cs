@@ -64,7 +64,7 @@ public class Character : Entity
 
 
             // Find Target
-            nearestTarget = EntityManager.GetNearestEntity(transform.position, 50f, (Team.Me | Team.Enemy) ^ Team, this);
+            nearestTarget = EntityManager.GetNearestEntity(transform.position, 100f, (Team.Me | Team.Enemy) ^ Team, this);
 
             // Find Obstacle (점유 중엔 유지)
             if (nearestTarget != null && Stat.OccupiedObstacle == null)
@@ -82,7 +82,7 @@ public class Character : Entity
 
         // 즉시 타겟이 죽었거나, 타겟이 공격 불가 상태이면, 가장 가까운 타겟으로 전환
         if (nearestTarget != null && nearestTarget.Stat.CanBeTargeted == false)
-            nearestTarget = EntityManager.GetNearestEntity(transform.position, 50f, (Team.Me | Team.Enemy) ^ Team, this);
+            nearestTarget = EntityManager.GetNearestEntity(transform.position, 100f, (Team.Me | Team.Enemy) ^ Team, this);
 
 
         // ── Logic ──────────────
@@ -304,7 +304,7 @@ public class Character : Entity
 
             if (result >= AttackResult.Hit) // Hit!
             {
-                BulletLineDrawer.DrawLine(c.VisualBody.position, c.nearestTarget.transform.position, Color.white, 0.1f);
+                BulletLineDrawer.DrawLine(c.VisualBody.position, c.nearestTarget.transform.position);
                 Debug.Log($"{c.name} -> {c.nearestTarget.name} : {damage:0}");
                 if (c.nearestTarget is Character t) TestCharacterAnimation.Hit(t.VisualBody);
             }

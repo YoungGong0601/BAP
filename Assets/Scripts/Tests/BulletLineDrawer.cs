@@ -17,13 +17,16 @@ public static class BulletLineDrawer
         coroutineRunner = runnerObject.AddComponent<Runner>();
     }
 
-    public static void DrawLine(Vector3 start, Vector3 end, Color color, float duration = 0.1f)
+    public static void DrawLine(Vector3 start, Vector3 end, Color? color = null, float duration = 0.1f)
     {
         GameObject bulletLine = Object.Instantiate(bulletLinePrefab, coroutineRunner.transform);
         LineRenderer lineRenderer = bulletLine.GetComponent<LineRenderer>();
 
-        lineRenderer.startColor = color;
-        lineRenderer.endColor = color;
+        if (color != null)
+        {
+            lineRenderer.startColor = color.Value;
+            lineRenderer.endColor = color.Value;
+        }
         coroutineRunner.StartCoroutine(UpdateLinePoint(lineRenderer, start, end, duration));
     }
 

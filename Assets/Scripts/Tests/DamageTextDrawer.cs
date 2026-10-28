@@ -24,6 +24,7 @@ public class DamageTextDrawer : MonoBehaviour
     {
         var spawnPosition = Camera.main.WorldToScreenPoint(position + Vector3.up * 1.5f);
         var damageText = Instantiate(DamageTextPrefab, spawnPosition, Quaternion.identity, canvas.transform);
+        damageText.transform.position += new Vector3(Random.Range(-30f, 30f), Random.Range(-10f, 10f) + 40f, 0f);
 
         if (result.HasFlag(AttackResult.Critical))
         {

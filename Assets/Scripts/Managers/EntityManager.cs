@@ -5,7 +5,7 @@ using UnityEngine;
 // swap-back / entity has index,cellKey
 public static class EntityManager
 {
-    public const float CellSize = 2; // grid size
+    public const float CellSize = 5; // grid size
     private static readonly Dictionary<Vector2Int, List<Entity>> entities = new();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
