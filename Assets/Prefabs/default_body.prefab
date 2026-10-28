@@ -159,6 +159,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Character
   Stat:
+    AttackType: 0
+    ArmorType: 0
     MaxHealth:
       _baseValue: 10
     Defense:
@@ -180,10 +182,11 @@ MonoBehaviour:
     Stability:
       _baseValue: 0
     MoveSpeed:
-      _baseValue: 3
+      _baseValue: 6
     CanAttack: 1
     CanBeTargeted: 1
     CanHit: 1
     CanMove: 1
+    OccupiedObstacle: {fileID: 0}
   Team: 0
   VisualBody: {fileID: 8641314528939668766}

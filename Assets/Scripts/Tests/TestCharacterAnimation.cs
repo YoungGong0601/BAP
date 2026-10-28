@@ -17,6 +17,12 @@ public static class TestCharacterAnimation
     const float HIT_DOWN = 0.05f;
     const float HIT_UP = 0.2f;
 
+    // ── 엄폐 도착 : 푹 숙였다가 잠깐 버틴 뒤 복귀 ──────────────
+    const float COVER_SQUASH = 0.65f;  // 숙일 때 y 비율
+    const float COVER_DOWN = 0.1f;
+    const float COVER_HOLD = 0.15f;
+    const float COVER_UP = 0.25f;
+
     // ── 이동 : x 늘었다 줄었다 반복 ──────────────
     const float MOVE_STRETCH = 1.1f;   // 늘어날 때 x 비율
     const float MOVE_HALF = 0.15f;     // 한 번 늘어나는 시간 (왕복 = x2)
@@ -79,6 +85,22 @@ public static class TestCharacterAnimation
         b.hit = DOTween.Sequence()
             .Append(DOVirtual.Float(1f, HIT_SQUASH, HIT_DOWN, r => SetSquash(body, b, r)).SetEase(Ease.OutQuad))
             .Append(DOVirtual.Float(HIT_SQUASH, 1f, HIT_UP, r => SetSquash(body, b, r)).SetEase(Ease.OutBack))
+            .SetTarget(body);
+    }
+
+    // 엄폐물 도착. 피격과 같은 y 스케일을 쓰므로 hit 트윈 자리를 공유 (서로 끊음)
+    public static void Cover(Transform body)
+    {
+        var b = Get(body);
+        if (b.dead != null) return;
+
+        b.hit?.Kill();
+        SetSquash(body, b, 1f);
+
+        b.hit = DOTween.Sequence()
+            .Append(DOVirtual.Float(1f, COVER_SQUASH, COVER_DOWN, r => SetSquash(body, b, r)).SetEase(Ease.OutQuad))
+            .AppendInterval(COVER_HOLD)
+            .Append(DOVirtual.Float(COVER_SQUASH, 1f, COVER_UP, r => SetSquash(body, b, r)).SetEase(Ease.OutBack))
             .SetTarget(body);
     }
 

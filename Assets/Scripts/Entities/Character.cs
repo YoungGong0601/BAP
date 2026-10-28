@@ -6,11 +6,6 @@ using UnityEngine.AI;
 [RequireComponent(typeof(NavMeshAgent))]
 public class Character : Entity
 {
-
-    const float FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET = -3f; // target 사거리 가능한 내가 되도록
-    const float OBSTACLE_FIND_RANGE = 6f; // 자신 근처 장애물인가
-    const float MIN_OBSTACLE_DISTANCE_FROM_TARGET = 3f; // 장애물과 타겟 사이의 최소 거리
-
     NavMeshMovement movement;
 
     // FSM
@@ -23,25 +18,15 @@ public class Character : Entity
         public abstract void OnExit();
     }
     StateBase currentState;
-    StateBase rest, chase, attackFocus, dead, goToObstacle;
+    StateBase rest, chase, attackFocus, dead;
+    GoToObstacle goToObstacle;
 
     Entity nearestTarget;
-    Obstacle validObstacle; // 찾은 엄폐물. 이용중인 엄폐물은 target.Stat.JoinedObstacle
 
 
 
-    // InCombat (wave 진행 중 == wave에 적이 남음)
-    // 타겟 :
-    // 0 엄폐자일 경우, 상대를 공격할 수 있는 범위 내의 엄폐물 뒤
-    // 1 가장 가까운 상대
 
-    // 정지 :
-    // -1 웨이브에 적이 없음 => 아군 준비 대기
-    // 0 -> 엄폐물 뒤에서 정지
-    // 1 -> 상대를 공격할 수 있는 범위 내에서 정지
-
-    // OutCombat
-    // 아군 이동가능 까지 대기 -> 앞으로 이동 -> 웨이브 시작 시 InCombat 진행
+    //━━━━━━━━━━ LifeCycle ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     private void Awake()
     {
@@ -53,8 +38,11 @@ public class Character : Entity
         attackFocus = new AttackFocus(this);
         dead = new Dead(this);
         goToObstacle = new GoToObstacle(this);
-        // test
-        Stat.AttackRange.SetBaseValue(Random.Range(10f, 17f));
+
+        Stat.OnDead += () => SetState(dead);
+
+        // test init value
+        Stat.AttackRange.SetBaseValue(Random.Range(20f, 30f));
     }
 
     void Update()
@@ -67,47 +55,49 @@ public class Character : Entity
     void FixedUpdate()
     {
         // fixme: 갱신은 Tick으로 진행하는걸 추천한다. 임시로 구현함.
+        if (currentState == dead) return;
+
         findTick++;
-        if (findTick >= 30) // 0.5초마다 갱신
+        if (findTick >= 30)
         {
             findTick = 0;
+
+
+            // Find Target
             nearestTarget = EntityManager.GetNearestEntity(transform.position, 50f, (Team.Me | Team.Enemy) ^ Team, this);
-            // if (!IsValidObstacle(validObstacle, nearestTarget))
-            // {
-            validObstacle = GetValidObstacle(nearestTarget);
-            validObstacle?.Join(this); // 선 타겟팅: 고른 즉시 예약
-            // }
+
+            // Find Obstacle (점유 중엔 유지)
+            if (nearestTarget != null && Stat.OccupiedObstacle == null)
+                SetCover(FindCover());
         }
     }
-
-
 
     void InCombatTick()
     {
         currentState?.OnUpdate();
 
-        if (Stat.Health <= 0f)
-        {
-            Enter(dead);
-            return;
-        }
-
-        // 엄폐물이 바뀌었거나 사라졌으면 기존 엄폐물에서 나옴
-        if (Stat.JoinedObstacle != null && Stat.JoinedObstacle != validObstacle)
-            Stat.JoinedObstacle.Leave(this);
+        if (currentState == dead) return;
 
         bool hasTarget = HasTarget();
-        if (hasTarget && Stat.JoinedObstacle != null && !Stat.JoinedObstacle.IsUserArrived)
-            Enter(goToObstacle); // 예약한 엄폐물로 이동, 도착하면 Arrive
+
+        // 즉시 타겟이 죽었거나, 타겟이 공격 불가 상태이면, 가장 가까운 타겟으로 전환
+        if (nearestTarget != null && nearestTarget.Stat.CanBeTargeted == false)
+            nearestTarget = EntityManager.GetNearestEntity(transform.position, 50f, (Team.Me | Team.Enemy) ^ Team, this);
+
+
+        // ── Logic ──────────────
+        // Behavior Tree?
+        if (cover != null && Stat.OccupiedObstacle != cover) // 엄폐물로 이동 중
+            SetState(goToObstacle);
         else if (hasTarget && TargetInRange())
-            Enter(attackFocus);
-        else if (hasTarget)
-            Enter(chase);
+            SetState(attackFocus);
+        else if (hasTarget && !TargetInRange() && Stat.CanMove)
+            SetState(chase);
         else
-            Enter(rest);
+            SetState(rest);
     }
 
-    void Enter(StateBase state)
+    void SetState(StateBase state)
     {
         if (currentState == state) return;
         currentState?.OnExit();
@@ -119,63 +109,58 @@ public class Character : Entity
     bool TargetInRange()
     => nearestTarget != null && (nearestTarget.transform.position - transform.position).ToXZ().sqrMagnitude <= Stat.AttackRange * Stat.AttackRange;
 
-    bool IsValidObstacle(Obstacle obstacle, Entity target)
+
+    //━━━━━━━━━━ Obstacle Methods ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // 타겟을 중심으로 내 사거리-offset가 닿는 범위를 체크하는데 이용하는 offset const
+    const float OBSTACLE_DETECTION_OFFSET = 3f; // target 사거리 가능한 내가 되도록
+
+    List<Obstacle> obstacleCache = new(3);
+
+    Obstacle cover; // 내 엄폐물 변경은 SetCover
+
+    // 타겟 기준 범위 안에서 나에게 가장 가까운 엄폐물
+    Obstacle FindCover()
     {
-        if (obstacle == null || target == null) return false;
+        var cnt = EntityManager.GetEntitiesInRange(nearestTarget.transform.position, Stat.AttackRange - OBSTACLE_DETECTION_OFFSET, Team.Obstacle, obstacleCache);
 
-        bool inRangeFromMe
-            = (obstacle.transform.position - transform.position).ToXZ().sqrMagnitude <= OBSTACLE_FIND_RANGE * OBSTACLE_FIND_RANGE;
-        bool isObstacleWithinAttackRangeOfTarget
-            = (obstacle.transform.position - target.transform.position).ToXZ().sqrMagnitude <= (Stat.AttackRange + FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET) * (Stat.AttackRange + FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET);
-        bool res = inRangeFromMe && isObstacleWithinAttackRangeOfTarget;
-        return res;
-    }
+        Obstacle best = obstacleCache.Contains(cover) ? cover : null; // 범위 밖이면 버림
+        float bestDist = best != null ? Mathf.Sqrt(best.sqrDistanceTo(this)) - Obstacle.REPLACE_RESERVER_DISTANCE_OFFSET : float.MaxValue;
 
-
-
-    // 타겟과의 거리가 공격 범위 내에 있는 유효한 장애물을 찾는다.
-    // 이미 유효한 장애물이 없으면,
-    // 적을 공격 할 수 있는 거리에 있는 장애물 중
-    // 사용되지 않은 장애물 중
-    // 자기 근처의 장애물 중
-    // 장애물이 너무 타겟에게 가깝지 않은 것 중
-    // 자신에게 가장 가까운 장애물을 반환한다.
-    List<Obstacle> obstacles_cache = new();
-    Obstacle GetValidObstacle(Entity target)
-    {
-        if (target == null) return null;
-
-        Obstacle validObstacle = null;
-        obstacles_cache.Clear();
-
-        var obstacleCnt = EntityManager.GetEntitiesInRange(target.transform.position, Stat.AttackRange + FIND_OBSTACLE_RANGE_DELTA_FROM_TARGET, Team.Obstacle, obstacles_cache);
-        if (obstacleCnt <= 0) return null;
-
-        var nearestFromMeSqr = OBSTACLE_FIND_RANGE * OBSTACLE_FIND_RANGE; // 못해도 이것보단 가까워야한다.
-
-        for (int i = obstacleCnt - 1; i >= 0; i--)
+        for (int i = 0; i < cnt; i++)
         {
-            var o = obstacles_cache[i];
-            if (o.User == this) return o; // 예약/사용 중인 내 엄폐물은 유지
+            var o = obstacleCache[i];
+            if (o == cover || !o.isActiveAndEnabled || !o.canHold(this)) continue;
 
-            // 사용된 장애물은 제외
-            if (o.IsUsing()) continue;
-
-            // 타겟과의 거리가 너무 가까운 장애물은 제외
-            if ((o.transform.position - target.transform.position).ToXZ().sqrMagnitude < MIN_OBSTACLE_DISTANCE_FROM_TARGET * MIN_OBSTACLE_DISTANCE_FROM_TARGET) continue;
-
-            // 자기 근처의 장애물 중 가장 가까운 장애물을 반환!
-            if ((o.transform.position - transform.position).ToXZ().sqrMagnitude <= nearestFromMeSqr)
+            var dist = Mathf.Sqrt(o.sqrDistanceTo(this));
+            if (dist < bestDist)
             {
-                nearestFromMeSqr = (o.transform.position - transform.position).ToXZ().sqrMagnitude;
-                validObstacle = o;
+                bestDist = dist;
+                best = o;
             }
         }
-
-        return validObstacle;
+        return best;
     }
 
+    // 엄폐물 교체
+    void SetCover(Obstacle next)
+    {
+        if (cover == next) return;
 
+        if (cover != null) cover.Leave(this);
+        cover = null;
+        Stat.OccupiedObstacle = null;
+
+        if (next != null && next.Hold(this, OnCoverLost)) cover = next;
+
+        if (currentState == goToObstacle) goToObstacle.MoveToCover(); // 이동 중 교체 -> 목적지 재설정
+    }
+
+    // 강제로 잃을 경우 호출되는 callback func
+    void OnCoverLost()
+    {
+        cover = null;
+        Stat.OccupiedObstacle = null;
+    }
 
     // ═══════════════════════════════════════
     //  States
@@ -196,6 +181,7 @@ public class Character : Entity
 
         public override void OnUpdate()
         {
+            // idle 애니메이션
         }
     }
 
@@ -207,6 +193,7 @@ public class Character : Entity
 
         public override void OnEnter()
         {
+            c.SetCover(null);
             c.movement.MoveTo(c.nearestTarget.transform.position);
             TestCharacterAnimation.StartMove(c.VisualBody);
         }
@@ -219,32 +206,39 @@ public class Character : Entity
 
         public override void OnUpdate()
         {
+            if (c.nearestTarget == null) return;
+
             var destination = c.movement.Destination;
             var targetPos = c.nearestTarget.transform.position;
-            if (c.nearestTarget != null && (destination - targetPos.ToXZ()).sqrMagnitude > REPATH_DISTANCE * REPATH_DISTANCE)
+
+            // 경로 재계산
+            if ((destination - targetPos.ToXZ()).sqrMagnitude > REPATH_DISTANCE * REPATH_DISTANCE)
                 c.movement.MoveTo(c.nearestTarget.transform.position);
         }
     }
 
     class GoToObstacle : StateBase
     {
-        const float REPATH_DISTANCE = 0.5f; // 엄폐 위치가 이만큼 바뀌면 경로 재계산
-        const float COVER_OFFSET = 1f;      // 엄폐물 중심에서 타겟 반대편으로 떨어질 거리
-        const float ARRIVE_DISTANCE = 0.5f; // 엄폐 위치에 이만큼 가까우면 도착
 
         public GoToObstacle(Character c) : base(c) { }
 
-        // 엄폐물 기준 타겟 반대편 위치
-        Vector3 CoverPos()
-        {
-            var obstaclePos = c.Stat.JoinedObstacle.transform.position;
-            return obstaclePos + (obstaclePos - c.nearestTarget.transform.position).SetY0().normalized * COVER_OFFSET;
-        }
-
         public override void OnEnter()
         {
-            c.movement.MoveTo(CoverPos());
+            MoveToCover();
             TestCharacterAnimation.StartMove(c.VisualBody);
+        }
+
+        public void MoveToCover()
+        {
+            if (c.cover == null || c.nearestTarget == null) return;
+            c.movement.MoveTo(BackToCover(c.cover, c.nearestTarget));
+        }
+
+        // 엄폐물 뒤(타겟 반대편) 위치
+        static Vector3 BackToCover(Obstacle cover, Entity target)
+        {
+            var dir = (cover.transform.position - target.transform.position).normalized;
+            return cover.transform.position + dir * 1.5f;
         }
 
         public override void OnExit()
@@ -255,20 +249,13 @@ public class Character : Entity
 
         public override void OnUpdate()
         {
-            if (c.Stat.JoinedObstacle == null || c.nearestTarget == null) return;
+            if (c.cover == null) return;
 
-            var coverPos = CoverPos();
-
-            // 도착 -> Arrive (다음 InCombatTick에서 attackFocus로 전환)
-            if ((coverPos - c.transform.position).ToXZ().sqrMagnitude <= ARRIVE_DISTANCE * ARRIVE_DISTANCE)
+            if (c.movement.IsArrived() && c.cover.Occupy(c))
             {
-                c.Stat.JoinedObstacle.Arrive(c);
-                return;
+                c.Stat.OccupiedObstacle = c.cover;
+                TestCharacterAnimation.Cover(c.VisualBody);
             }
-
-            // 엄폐물이 바뀌었거나 타겟이 움직여 엄폐 위치가 바뀌면 재계산
-            if ((c.movement.Destination - coverPos.ToXZ()).sqrMagnitude > REPATH_DISTANCE * REPATH_DISTANCE)
-                c.movement.MoveTo(coverPos);
         }
     }
 
@@ -337,7 +324,7 @@ public class Character : Entity
 
         public override void OnEnter()
         {
-            c.Stat.JoinedObstacle?.Leave(c);
+            c.SetCover(null);
             c.movement.Stop();
             c.Stat.CanBeTargeted = false;
             TestCharacterAnimation.Dead(c.VisualBody);

@@ -12,7 +12,11 @@ public static class AttackApplier
     public static AttackResult Attack(Entity attacker, Entity target, out float damage)
     {
         var (a_stat, t_stat) = (attacker.Stat, target.Stat);
+
+        AttackResult result = AttackResult.Error;
+        bool isBlocked = false;
         damage = 0f;
+
         if (a_stat == null || t_stat == null) return AttackResult.Error;
         if (!a_stat.CanAttack || !t_stat.CanHit) return AttackResult.Error; // 공격 불가, 피격 불가 // FIXME: Miss로 해야하는가?
 
@@ -21,19 +25,25 @@ public static class AttackApplier
 
         // 엄폐물
         // FIXME: 엄폐물 회피율 30%(default)로 고정됨. SS,S,A... 필요. 예외 없이 2배 데미지 적용인 점.
-        if (target is not Obstacle && t_stat.JoinedObstacle != null && t_stat.JoinedObstacle.IsUserArrived)
+        if (target is not Obstacle && t_stat.OccupiedObstacle != null) // Obstacle에 엄폐되어 있을 경우
         {
             if (Random.value < 0.3f) // 30% 확률로 엄폐물이 데미지를 받음
             {
-                Attack(attacker, t_stat.JoinedObstacle, out var obsDamage);
-                return AttackResult.Blocked; // 엄폐물 회피 성공
+                t_stat = t_stat.OccupiedObstacle.Stat; // 엄폐물에 데미지 적용
+                isBlocked = true;
             }
         }
 
-        if (!CombatFormula.CalculateDamage(attacker, target, out damage, out var result))
+        if (!CombatFormula.CalculateDamage(a_stat, t_stat, out damage, out result))
             return AttackResult.Error;
 
+        // ── Apply ──────────────
         t_stat.Health = Mathf.Max(0f, t_stat.Health - damage);
+
+        if (isBlocked) result |= AttackResult.Blocked;
+
+        // text
+        DamageTextDrawer.Instance?.DrawDamageText(target.transform.position, damage, result);
 
         return result;
     }
@@ -50,33 +60,36 @@ public static class CombatFormula
     const float STABILITY_MIN = 0.2f;
     const float DEFENSE_CONST = 1666.66f;       // 피해 감소 = 1 / (1 + 방어 / 1666.66)
 
-    public static bool CalculateDamage(Entity attacker, Entity target, out float totalDamage, out AttackResult attackResult)
+    public static bool CalculateDamage(EntityStats attackerStat, EntityStats targetStat, out float totalDamage, out AttackResult attackResult)
     {
         totalDamage = 0f;
-        attackResult = AttackResult.Error;
-        var a_stat = attacker.Stat;
-        var t_stat = target.Stat;
+        attackResult = AttackResult.Hit;
 
-        if (a_stat == null || t_stat == null) return false; // calculation failed
-        totalDamage = a_stat.Damage;
+        if (attackerStat == null || targetStat == null) // calculation failed
+        {
+            attackResult = AttackResult.Error;
+            return false;
+        }
+
+        totalDamage = attackerStat.Damage;
 
         // ── 계산식 ──────────────
 
         // 치명
-        if (Random.value < GetCriticalRate(a_stat))
+        if (Random.value < GetCriticalRate(attackerStat))
         {
-            totalDamage *= a_stat.CriticalDamage / CRITICAL_DAMAGE_UNIT;
+            totalDamage *= attackerStat.CriticalDamage / CRITICAL_DAMAGE_UNIT;
             attackResult |= AttackResult.Critical;
         }
 
         // 안정 (최소 비율 ~ 100% 사이 랜덤)
-        totalDamage *= Random.Range(GetStabilityMin(a_stat), 1f);
+        totalDamage *= Random.Range(GetStabilityMin(attackerStat), 1f);
 
         // 방어
-        totalDamage *= GetDefenseRatio(t_stat);
+        totalDamage *= GetDefenseRatio(targetStat);
 
         // 상성
-        var typeMultipleValue = TypeChart.GetMultiplier(a_stat.AttackType, t_stat.ArmorType);
+        var typeMultipleValue = TypeChart.GetMultiplier(attackerStat.AttackType, targetStat.ArmorType);
         totalDamage *= typeMultipleValue;
 
         attackResult |=

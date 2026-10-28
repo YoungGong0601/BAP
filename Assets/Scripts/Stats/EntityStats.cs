@@ -1,7 +1,5 @@
 
-using System;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 // entity stats
 [System.Serializable]
@@ -11,9 +9,25 @@ public class EntityStats
     [SerializeField] public AttackType AttackType = AttackType.Normal;
     [SerializeField] public ArmorType ArmorType = ArmorType.Light;
 
+    // ── Event ──────────────
+    public event System.Action OnDead;
+
     // health
     [SerializeField] public Stat MaxHealth = new(100);
-    [HideInInspector] public float Health;
+    float health;
+    public float Health
+    {
+        get => health;
+        set
+        {
+            bool wasAlive = health > 0f;
+            health = value;
+            if (wasAlive && health <= 0f) OnDead?.Invoke(); // 0 이하로 떨어지는 순간 1회
+        }
+    }
+
+    //━━━━━━━━━━ Stats ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
     public Stat Defense;
     public Stat Evasion;
     // attack
@@ -27,7 +41,8 @@ public class EntityStats
     public bool CanMove = true;
 
 
-    // Action
-    public Obstacle JoinedObstacle;
+    //━━━━━━━━━━ Data ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+    // FIXME : Public, Entity에다가 두는게 맞는지 고민 필요
+    public Obstacle OccupiedObstacle;
 }
